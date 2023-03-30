@@ -9,10 +9,10 @@ main Orders
 	.include "DETAIL" REPOSITORY, structure="strDetail"
 
 	record
-		system_date		,a20
-		year			,d4 @system_date
-		month			,d2 @system_date+4
-		day				,d2 @system_date+6
+		system_date	,a20
+		year		,d4 @system_date
+		month		,d2 @system_date+4
+		day		,d2 @system_date+6
 	endrecord
 
 	record
@@ -31,11 +31,11 @@ main Orders
 		max             ,i4,3       ;Maximum detail records currently supported
 	endrecord
 
-porc
+proc	;GWH: Typo, was "porc"
 
-	xcall startup
-	xcall process
-	xcall shutdown
+	call startup	;GWH: xcall is not correct in this case,
+	call process	;     as it is for calling external subs.
+	call shutdown	;     Should use call for these internal subs.
 
 	stop
 
@@ -101,7 +101,7 @@ Shutdown,
 	m_handle=%mem_proc(DM_FREE,m_handle)
 
 	;Close file channels
-	close hchan                
+	close hchan
 	close dchan
 
 	return
@@ -165,10 +165,15 @@ Order_header,
 			xcall display_message("Order already exists!")
 		else
 		begin
+			xcall display_text(header_id,2,20,^a(oh_number))	;GWH: Show order number code with leading zeros
 			xcall input(header_id,4,20,oh_customer,1)
 			xcall input(header_id,5,20,oh_date,,,1)
+			xcall s_bld(temp,,"%=d/%=d/%=d", 
+			&	oh_date(7:2), oh_date(5:2), oh_date(1:4))	;GWH: Format date as dd/mm/yyyy
+			xcall display_text(header_id,5,20,temp)			;GWH: Show formatted date
 			xcall input(header_id,6,20,oh_contact,1)
 			xcall input(header_id,7,20,oh_salesrep,1)
+			xcall display_text(header_id,7,20,^a(oh_salesrep))	;GWH: Show sales rep code with leading zeros
 
 			call order_detail
 
@@ -214,6 +219,7 @@ Order_detail,
 	begin
 
 		incr count
+		if count.gt.max call Extend_dynamic_memory					;GWH: Wasn't expanding the memory area when required
 		xcall s_bld(temp,,"Order Detail (Entering item %d of %d)",count,max)
 		xcall w_brdr(detail_id,WB_TITLE,%atrim(temp))
 
@@ -225,7 +231,7 @@ Order_detail,
 		end
 
 		xcall input(detail_id,4,15,^m(strDetail[count].od_qty,m_handle),1)
-		xcall input(detail_id,5,15,^m(strDetail[count].od_unitprice,m_handle),1)
+		xcall input(detail_id,5,15,^m(strDetail[count].od_unit_price,m_handle),1)	;GWH: Typo, was "od_unitprice" (missing "_")
 
 		^m(strDetail[count].od_number,m_handle)=oh_number
 		^m(strDetail[count].od_item,m_handle)=count
@@ -238,7 +244,7 @@ Order_detail,
 	return
 
 ;----------------------------------------
-;When the number of defail records to be held in dynamic memory exceeds
+;When the number of detail records to be held in dynamic memory exceeds		;GWH: Typo, was "defail"
 ;the currently allocated memory, allocate some more!
 ;
 Extend_dynamic_memory,
@@ -258,7 +264,7 @@ View_order,
 	xcall display_text(header_id,4,2,"Customer account:")
 	xcall display_text(header_id,5,2,"      Order date:")
 	xcall display_text(header_id,6,2,"       Placed by:")
-	xcall display_text(heeder_id,7,2,"       Sales rep:")
+	xcall display_text(header_id,7,2,"       Sales rep:")	;GWH: Typo, was "heeder_id"
 
 	repeat
 	begin
@@ -268,14 +274,17 @@ View_order,
 		if oh_number.eq.0
 			exitloop
 
-		if (%file_access(FileOp.ReadNext,hchan,header,oh_number).ne.FileResult.OK) then
-			xcall display_message("Order not found!")
+		if (%file_access(FileOp.Read,hchan,header,oh_number).ne.FileResult.OK) then	;GWH: ReadNext was reading each record in turn, ignoring our specified key
+ 			xcall display_message("Order not found!")
 		else
 		begin
 			data keyPressed, a1
 
+			xcall display_text(header_id,2,20,^a(oh_number))	;GWH: Show order number code with leading zeros
 			xcall display_text(header_id,4,20,oh_customer)
-			xcall display_text(header_id,5,20,^a(oh_date))
+			xcall s_bld(temp,,"%=d/%=d/%=d", 
+			&	oh_date(7:2), oh_date(5:2), oh_date(1:4))	;GWH: Format date as dd/mm/yyyy
+			xcall display_text(header_id,5,20,temp)			;GWH: Show formatted date
 			xcall display_text(header_id,6,20,oh_contact)
 			xcall display_text(header_id,7,20,^a(oh_salesrep))
 
@@ -284,7 +293,8 @@ View_order,
 
 			call view_order_detail
 
-			xcall clear_box(header_id,4,20,9,60)
+			xcall clear_box(header_id,4,20,7,60)	;GWH: Clear field data
+			xcall clear_box(header_id,9,2,9,60)	;GWH: Clear bottom-line prompt
 
 		end
 	end
@@ -317,13 +327,15 @@ View_order_detail,
 				begin
 					data keyPressed, a1
 
-					xcall s_bld(temp,,"Order Detail (Order %d, item %d)",
+					xcall s_bld(temp,,"Order Detail (Order %=d, item %d)",			;GWH: Format order number code with leading zeros
 					&	oh_number,^m(strDetail[1].od_item,m_handle))
 					xcall w_brdr(detail_id,WB_TITLE,%atrim(temp))
 
 					xcall display_text(detail_id,2,15,^m(strDetail[1].od_part,m_handle))
-					xcall display_text(detail_id,4,15,^a(^m(strDetail[1].od_qty,m_handle)))
-					xcall display_text(detail_id,5,15,^a(^m(strDetail[1].od_unit_price,m_handle)))
+					temp=^m(strDetail[1].od_qty,m_handle), "ZZZZX" [LEFT]			;GWH: Format quantity without leading zeros
+					xcall display_text(detail_id,4,15,%atrim(temp))				;GWH: Show formatted quantity
+					temp=^m(strDetail[1].od_unit_price,m_handle), "$$$$$$X.XX" [LEFT]	;GWH: Format price with a currency sign, but without leading zeros
+					xcall display_text(detail_id,5,15,%atrim(temp))				;GWH: Show formatted unit price
 
 					xcall display_text(detail_id,9,2,"Press RETURN for the next item: ")
 					xcall wait_key(detail_id,9,34,keyPressed)

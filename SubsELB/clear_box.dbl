@@ -36,7 +36,7 @@ proc
 	for count from 1 thru rows
 	begin
 		xcall w_disp(a_wndid,
-		&	WD_POS,(a_row_from+1+count),a_col_from,
+		&	WD_POS,(a_row_from-1+count),a_col_from,	;GWH: Typo, was "+1" not "-1", causing wrong row to be cleared.
 		&	spaces(1:cols))
 	end
 
